@@ -1,67 +1,33 @@
 import unittest
 import asyncio
 import json
+import websockets
 
 
 class SocketClient:
-    """Example client for testing the socket server."""
-    
-    def __init__(self, host="localhost", port=8008):
-        self.host = host
-        self.port = port
-        self.reader = None
-        self.writer = None
-    
+    def __init__(self, host="localhost", port=8008, path="/ws"):
+        self.uri = f"ws://{host}:{port}{path}"
+        self.websocket = None
+
     async def connect(self):
-        """Connect to the server."""
-        self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
-    
+        self.websocket = await websockets.connect(self.uri)
+
     async def disconnect(self):
-        """Disconnect from the server."""
-        if self.writer:
-            self.writer.close()
-            await self.writer.wait_closed()
+        if self.websocket:
+            await self.websocket.close()
 
     async def send_command(self, command: dict) -> dict:
-        if not self.writer:
+        if not self.websocket:
             raise RuntimeError("Not connected to server")
-        
-        # Prepare HTTP request
-        command_data = json.dumps(command).encode('utf-8')
-        request = (
-            "POST /ws HTTP/1.1\r\n"
-            + f"Host: {self.host}\r\n"
-            + "Content-Type: application/json\r\n"
-            + f"Content-Length: {len(command_data)}\r\n"
-            + "\r\n"
-        ).encode("utf-8") + command_data
-
-        self.writer.write(request)
-        await self.writer.drain()
-
-        # Read HTTP response headers
-        response_headers = b""
-        while b"\r\n\r\n" not in response_headers:
-            response_headers += await self.reader.read(1)
-            
-        headers, _ = response_headers.split(b"\r\n\r\n", 1)
-        headers = headers.decode('utf-8').split("\r\n")
-        content_length = 0
-        
-        for header in headers:
-            if header.lower().startswith("content-length:"):
-                content_length = int(header.split(":")[1].strip())
-                break
-
-        # Read response body
-        response_body = await self.reader.readexactly(content_length)
-        print(response_body.decode('utf-8'))
-        response = json.loads(response_body.decode('utf-8'))
-        return response
+        await self.websocket.send(json.dumps(command))
+        response = await self.websocket.recv()
+        return json.loads(response)
 
 
 class TestServer(unittest.IsolatedAsyncioTestCase):
     """Do 999 concurrent writes and reads to the server, plus purposeful errors."""
+    
+    threads = []
 
     async def test_mixed_clients(self):    
         import random
