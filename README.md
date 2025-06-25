@@ -4,7 +4,7 @@ This server operates asynchronously and can handle 1000+ clients doing random op
 
 ### Usage
 
-* Will only work at http://localhost:8008/ws 
+* Will only work at ws://localhost:8008/ws 
 
 - Do `python aserver.py`
 - In a separate shell, do `python clients.py`
